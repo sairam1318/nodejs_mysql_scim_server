@@ -13,8 +13,16 @@
  *  limitations under the License.
  */
 
-let sqlite3 = require('sqlite3').verbose();
-let db = new sqlite3.Database('scim.db');
+// let sqlite3 = require('sqlite3').verbose();
+// let db = new sqlite3.Database('scim.db');
+const mysql = require('mysql');
+var con = mysql.createConnection({
+    user     : 'root',
+    password : '1234',
+    database : 'okta_scim'
+});
+con.connect();
+
 let uuid = require('uuid');
 let scimCore = require('./SCIMCore');
 let out = require('./Logs');
@@ -24,53 +32,55 @@ let mGroupMembership = require('../models/GroupMembership');
 
 class Database {
     static dbInit() {
-        let query = "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'";
+        let query = "SELECT * FROM information_schema.tables WHERE table_schema = 'okta_scim' AND table_name = 'Users' LIMIT 1";
 
-        db.get(query, function (err, rows) {
+        con.query(query, function (err, rows) {
             if (err !== null) {
                 out.error("Database.dbInit::Users::SELECT", err);
-            } else if (rows === undefined) {
-                query = "CREATE TABLE Users ('id' primary key, 'active' INTEGER, \
-                                             'userName' VARCHAR(255), 'givenName' VARCHAR(255), \
-                                             'middleName' VARCHAR(255), 'familyName' VARCHAR(255), \
-                                             'email' VARCHAR(255))";
-
-                db.run(query, function (err) {
+            } else if (rows.length == 0) {
+                query = "CREATE TABLE Users (id varchar(255) primary key, active int, userName VARCHAR(255), givenName VARCHAR(255), middleName VARCHAR(255), familyName VARCHAR(255), email VARCHAR(255))";
+                con.query(query, function (err, result) {
                     if (err !== null) {
                         out.error("Database.dbInit::Users::CREATE", err);
-                    }
+                    }else{
+                        console.log("table created");
+                    }   
                 });
             }
         });
 
-        query = "SELECT name FROM sqlite_master WHERE type='table' AND name='Groups'";
-
-        db.get(query, function (err, rows) {
+        query = "SELECT * FROM information_schema.tables WHERE table_schema = 'okta_scim' AND table_name = 'Groups_scim' LIMIT 1";
+        con.query(query, function (err, rows) {
             if (err !== null) {
                 out.error("Database.dbInit::Groups::SELECT", err);
-            } else if (rows === undefined) {
-                query = "CREATE TABLE Groups ('id' primary key, 'displayName' VARCHAR(255))";
-
-                db.run(query, function (err) {
+            } else if (rows.length == 0) {
+                console.log("inside grp query", rows);
+                query = "CREATE TABLE Groups_scim (id varchar(255) primary key, displayName varchar(255))";
+                con.query(query, function (err) {
                     if (err !== null) {
                         out.error("Database.dbInit::Groups::CREATE", err);
+                    } else{
+                        console.log("table created");
                     }
                 })
             }
         });
 
-        query = "SELECT name FROM sqlite_master WHERE type='table' AND name='GroupMemberships'";
+        query = "SELECT * FROM information_schema.tables WHERE table_schema = 'okta_scim' AND table_name = 'GroupMemberships' LIMIT 1";
 
-        db.get(query, function (err, rows) {
+        con.query(query, function (err, rows) {
+            
             if (err !== null) {
                 out.error("Database.dbInit::GroupMemberships::SELECT", err);
-            } else if (rows === undefined) {
-                query = "CREATE TABLE GroupMemberships ('id' primary key, 'groupId' VARCHAR(255), 'userId' VARCHAR(255), " +
-                        "UNIQUE (groupId, userId) ON CONFLICT IGNORE)";
+            } else if (rows.length == 0) {
+                query = "CREATE TABLE GroupMemberships (id varchar(255) primary key, groupId VARCHAR(255), userId VARCHAR(255), " +
+                        "UNIQUE (groupId, userId))";
 
-                db.run(query, function (err) {
+                con.query(query, function (err) {
                     if (err !== null) {
                         out.error("Database.dbInit::GroupMemberships::CREATE", err);
+                    }else{
+                        console.log("table created");
                     }
                 });
             }
@@ -80,8 +90,8 @@ class Database {
     static async getFilteredUsers(filterAttribute, filterValue, startIndex, count, reqUrl, callback) {
         let query = "SELECT * FROM Users WHERE " + filterAttribute + "='" + filterValue + "'";
         let self = this;
-
-        await db.all(query, async function (err, rows) {
+        console.log("Inside core get filtered user");
+        await con.query(query, async function (err, rows) {
             if (err !== null) {
                 out.error("Database.getFilteredUsers", err);
 
@@ -109,10 +119,10 @@ class Database {
     }
 
     static async getFilteredGroups(filterAttribute, filterValue, startIndex, count, reqUrl, callback) {
-        let query = "SELECT * FROM Groups WHERE " + filterAttribute + "='" + filterValue + "'";
+        let query = "SELECT * FROM groups_scim WHERE " + filterAttribute + "='" + filterValue + "'";
         let self = this;
 
-        await db.all(query, async function (err, rows) {
+        await con.query(query, async function (err, rows) {
             if (err !== null) {
                 out.error("Database.getFilteredGroups", err);
 
@@ -143,17 +153,15 @@ class Database {
         let query = "SELECT * FROM Users";
         let self = this;
 
-        await db.all(query, async function (err, rows) {
-            if (err !== null) {
-                out.error("Database.getAllUsers", err);
+        await con.query(query, async function (err, rows) {
+            // console.log(rows);
 
+            if (err !== null) {
+                console.log("err is not null");
+                out.error("Database.getAllUsers", err);
                 callback(scimCore.createSCIMError(err, "400"));
             } else if (rows === undefined) {
                 callback(scimCore.createSCIMError("User Not Found", "404"));
-            }
-
-            if (rows.length < count) {
-                count = rows.length;
             }
 
             await self.getGroupMemberships(function (err, memberships) {
@@ -171,10 +179,11 @@ class Database {
     }
 
     static async getAllGroups(startIndex, count, reqUrl, callback) {
-        let query = "SELECT * FROM Groups";
+        let query = "SELECT * FROM groups_scim";
         let self = this;
 
-        await db.all(query, async function (err, rows) {
+        await con.query(query, async function (err, rows) {
+            console.log("After executing the query. ", err);
             if (err !== null) {
                 out.error("Database.getAllGroups", err);
 
@@ -194,7 +203,6 @@ class Database {
                     for (let i = 0; i < rows.length; i++) {
                         rows[i]["members"] = self.getUsersForGroup(rows[i]["id"], memberships);
                     }
-
                     callback(scimCore.createSCIMGroupList(rows, startIndex, count, reqUrl));
                 }
             });
@@ -205,7 +213,8 @@ class Database {
         let query = "SELECT * FROM Users WHERE id = '" + String(userId) + "'";
         let self = this;
 
-        await db.get(query, async function (err, rows) {
+        await con.query(query, async function (err, rows) {
+            console.log("inside get user rows: ",rows);
             if (err !== null) {
                 out.error("Database.getUser", err);
 
@@ -217,8 +226,10 @@ class Database {
                     if (err !== null) {
                         callback(scimCore.createSCIMError(err, "400"));
                     } else {
+                        
                         rows["groups"] = self.getGroupsForUser(rows["id"], memberships);
-                        callback(scimCore.parseSCIMUser(rows, reqUrl));
+                        console.log("..... inside.....", rows);
+                        callback(scimCore.parseSCIMUser(rows[0], reqUrl));
                     }
                 });
             }
@@ -226,10 +237,10 @@ class Database {
     }
 
     static async getGroup(groupId, reqUrl, callback) {
-        let query = "SELECT * FROM Groups WHERE id = '" + String(groupId) + "'";
+        let query = "SELECT * FROM groups_scim WHERE id = '" + String(groupId) + "'";
         let self = this;
 
-        await db.get(query, async function (err, rows) {
+        await con.query(query, async function (err, rows) {
             if (err !== null) {
                 out.error("Database.getGroup", err);
 
@@ -252,12 +263,12 @@ class Database {
     static async createUser(userModel, reqUrl, callback) {
         let query = "SELECT * FROM Users WHERE userName='" + userModel["userName"] + "'";
 
-        await db.get(query, function (err, rows) {
+        await con.query(query, function (err, rows) {
             if (err !== null) {
                 out.error("Database.createUser::SELECT", err);
 
                 callback(scimCore.createSCIMError(err, "400"));
-            } else if (rows === undefined) {
+            } else if (rows.length == 0) {
                 let userId = String(uuid.v1());
 
                 query = "INSERT INTO Users (id, active, userName, givenName, middleName, familyName, email) \
@@ -265,7 +276,7 @@ class Database {
                         "', '" + userModel["givenName"] + "', '" + userModel["middleName"] + "', '" +
                         userModel["familyName"] + "', '" + userModel["email"] + "')";
 
-                db.run(query, async function (err) {
+                con.query(query, async function (err) {
                     if (err !== null) {
                         out.error("Database.createUser::INSERT", err);
 
@@ -295,7 +306,7 @@ class Database {
                         }
 
                         query = query + ";";
-                        await db.run(query, function (err) {
+                        await con.query(query, function (err) {
                             if (err !== null) {
                                 out.error("Database.createUser::MEMBERSHIPS", err);
 
@@ -315,20 +326,21 @@ class Database {
     }
 
     static async createGroup(groupModel, reqUrl, callback) {
-        let query = "SELECT * FROM Groups WHERE displayName='" + groupModel["displayName"] + "'";
+        let query = "SELECT * FROM groups_scim WHERE displayName='" + groupModel["displayName"] + "'";
 
-        await db.get(query, function (err, rows) {
+        await con.query(query, function (err, rows) {
+            console.log(rows);
             if (err !== null) {
                 out.error("Database.createGroup::SELECT", err);
 
                 callback(scimCore.createSCIMError(err, "400"));
-            } else if (rows === undefined) {
+            } else if (rows.length === 0) {
                 let groupId = String(uuid.v1());
 
-                query = "INSERT INTO Groups (id, displayName) \
+                query = "INSERT INTO groups_scim (id, displayName) \
                          VALUES ('" + String(groupId) + "', '" + groupModel["displayName"] + "')";
 
-                db.run(query, async function (err) {
+                con.query(query, async function (err) {
                     if (err !== null) {
                         out.error("Database.createGroup::INSERT", err);
 
@@ -356,7 +368,7 @@ class Database {
 
                         query = query + ";";
 
-                        await db.run(query, function (err) {
+                        await con.query(query, function (err) {
                             if (err !== null) {
                                 out.error("Database.createGroup::MEMBERSHIPS", err);
 
@@ -376,8 +388,9 @@ class Database {
     static async patchUser(attributeName, attributeValue, userId, reqUrl, callback) {
         let query = "UPDATE Users SET " + attributeName + " = '" + attributeValue + "' WHERE id = '" + String(userId) + "'";
         let self = this;
+        console.log(query);
 
-        await db.run(query, function (err) {
+        await con.query(query, function (err) {
             if (err !== null) {
                 out.error("Database.patchUser::UPDATE", err);
 
@@ -386,7 +399,7 @@ class Database {
 
             query = "SELECT * FROM Users WHERE id = '" + userId + "'";
 
-            db.get(query, async function (err, rows) {
+            con.query(query, async function (err, rows) {
                 if (err !== null) {
                     out.error("Database.patchUser::SELECT", err);
 
@@ -399,7 +412,7 @@ class Database {
                             callback(scimCore.createSCIMError(err, "400"));
                         } else {
                             rows["groups"] = self.getGroupsForUser(rows["id"], memberships);
-                            callback(scimCore.parseSCIMUser(rows, reqUrl));
+                            callback(scimCore.parseSCIMUser(rows[0], reqUrl));
                         }
                     });
                 }
@@ -408,19 +421,19 @@ class Database {
     }
 
     static async patchGroup(attributeName, attributeValue, groupId, reqUrl, callback) {
-        let query = "UPDATE Groups SET " + attributeName + " = '" + attributeValue + "' WHERE id = '" + String(groupId) + "'";
+        let query = "UPDATE groups_scim SET " + attributeName + " = '" + attributeValue + "' WHERE id = '" + String(groupId) + "'";
         let self = this;
 
-        await db.run(query, function (err) {
+        await con.query(query, function (err) {
             if (err !== null) {
                 out.error("Database.patchGroup::UPDATE", err);
 
                 callback(scimCore.createSCIMError(err, "400"));
             }
 
-            query = "SELECT * FROM Groups WHERE id = '" + groupId + "'";
+            query = "SELECT * FROM groups_scim WHERE id = '" + groupId + "'";
 
-            db.get(query, async function (err, rows) {
+            con.query(query, async function (err, rows) {
                 if (err !== null) {
                     out.error("Database.patchGroup::SELECT", err);
 
@@ -443,8 +456,8 @@ class Database {
 
     static async updateUser(userModel, userId, reqUrl, callback) {
         let query = "SELECT * FROM Users WHERE id = '" + String(userId) + "'";
-
-        await db.get(query, async function (err, rows) {
+        // console.log(userModel);
+        await con.query(query, async function (err, rows) {
             if (err !== null) {
                 out.error("Database.updateUser::SELECT", err);
 
@@ -452,54 +465,60 @@ class Database {
             } else if (rows === undefined) {
                 callback(scimCore.createSCIMError("User Not Found", "404"));
             } else {
-                query = "UPDATE Users SET userName = '" + userModel["userName"] + "', givenName = '" + userModel["givenName"] +
+                query = "UPDATE Users SET active = '" + userModel['active'] + "', userName = '" + userModel["userName"] + "', givenName = '" + userModel["givenName"] +
                     "', middleName = '" + userModel["middleName"] + "', familyName = '" + userModel["familyName"] +
                     "', email = '" + userModel["email"] + "' WHERE id = '" + String(userId) + "'";
-
-                await db.run(query, async function (err) {
+    
+                console.log(query);
+                await con.query(query, async function (err, row) {
+                    console.log(row);
                     if (err !== null) {
                         out.error("Database.updateUser::UPDATE", err);
-
                         callback(scimCore.createSCIMError(err, "400"));
+                    }else{
+                    
+                        callback(scimCore.parseSCIMUser(row));
                     }
 
                     let groups = userModel["groups"];
+                    // console.log(groups);
                     let membershipId = null;
 
-                    query = "INSERT INTO GroupMemberships (id, groupId, userId) VALUES";
+                    // query = "INSERT INTO GroupMemberships (id, groupId, userId) VALUES";
+                    // //have to make changes here I made it to 
+                    // for (let i = 0; i < groups.length; i++) {
+                    //     if (i > 0) {
+                    //         query = query + ",";
+                    //     }
 
-                    for (let i = 0; i < groups.length; i++) {
-                        if (i > 0) {
-                            query = query + ",";
-                        }
+                    //     membershipId = String(uuid.v1());
 
-                        membershipId = String(uuid.v1());
+                    //     query = query + " ('" + membershipId + "', '" + groups[i]["value"] + "', '" + userId + "')";
+                        
+                    // }
+                    // query = query + ";";
+                    
+                    // await con.query(query, function (err) {
+                    //     if (err !== null) {
+                    //         out.error("Database.updateUser::MEMBERSHIPS", err);
 
-                        query = query + " ('" + membershipId + "', '" + groups[i]["value"] + "', '" + userId + "')";
-                    }
-
-                    query = query + ";";
-
-                    await db.run(query, function (err) {
-                        if (err !== null) {
-                            out.error("Database.updateUser::MEMBERSHIPS", err);
-
-                            callback(scimCore.createSCIMError(err, "400"));
-                        } else {
-                            callback(scimCore.createSCIMUser(userId, rows.active, userModel["userName"], userModel["givenName"],
-                                userModel["middleName"], userModel["familyName"], userModel["email"],
-                                groups, reqUrl));
-                        }
-                    });
+                    //         callback(scimCore.createSCIMError(err, "400"));
+                    //     } else {
+                    //         callback(scimCore.createSCIMUser(userId, rows.active, userModel["userName"], userModel["givenName"],
+                    //             userModel["middleName"], userModel["familyName"], userModel["email"],
+                    //             groups, reqUrl));
+                    //     }
+                    // });
+                    
                 });
             }
         });
     }
 
     static async updateGroup(groupModel, groupId, reqUrl, callback) {
-        let query = "SELECT * FROM Groups WHERE id = '" + String(groupId) + "'";
+        let query = "SELECT * FROM groups_scim WHERE id = '" + String(groupId) + "'";
 
-        await db.get(query, function (err, rows) {
+        await con.query(query, function (err, rows) {
             if (err !== null) {
                 out.error("Database.updateGroup::SELECT", err);
 
@@ -507,9 +526,9 @@ class Database {
             } else if (rows === undefined) {
                 callback(scimCore.createSCIMError("Group Not Found", "404"));
             } else {
-                query = "UPDATE Groups SET displayName = '" + groupModel["displayName"] + "' WHERE id = '" + String(groupId) + "'";
-
-                db.run(query, async function (err) {
+                query = "UPDATE groups_scim SET displayName = '" + groupModel["displayName"] + "' WHERE id = '" + String(groupId) + "'";
+                console.log("update query", query);
+                con.query(query, async function (err) {
                     if (err !== null) {
                         out.error("Database.updateGroup::UPDATE", err);
 
@@ -518,8 +537,8 @@ class Database {
 
                     let members = groupModel["members"];
                     let membershipId = null;
-
-                    query = "INSERT INTO GroupMemberships (id, userId, groupId) VALUES";
+                    //changed from insert to update.
+                    query = "Insert INTO GroupMemberships (id, userId, groupId) VALUES";
 
                     for (let i = 0; i < members.length; i++) {
                         if (i > 0) {
@@ -532,16 +551,17 @@ class Database {
                     }
 
                     query = query + ";";
+                    console.log(query);
+                    callback(scimCore.createSCIMGroup(groupId, groupModel["displayName"], members, reqUrl));
 
-                    await db.run(query, function (err) {
-                        if (err !== null) {
-                            out.error("Database.updateGroup::MEMBERSHIPS", err);
-
-                            callback(scimCore.createSCIMError(err, "400"));
-                        } else {
-                            callback(scimCore.createSCIMGroup(groupId, groupModel["displayName"], members, reqUrl));
-                        }
-                    });
+                    // await con.query(query, function (err) {
+                    //     if (err !== null) {
+                    //         out.error("Database.updateGroup::MEMBERSHIPS", err);
+                    //         callback(scimCore.createSCIMError(err, "400"));
+                    //     } else {
+                    //         callback(scimCore.createSCIMGroup(groupId, groupModel["displayName"], members, reqUrl));
+                    //     }
+                    // });
                 });
             }
         });
@@ -549,11 +569,11 @@ class Database {
 
     static async getGroupMemberships(callback) {
         let query = "SELECT m.groupId, m.userId, g.displayName, u.givenName, u.familyName " +
-                    "FROM GroupMemberships m " +
-                    "LEFT JOIN Groups g ON m.groupId = g.id " +
+                    "FROM groupMemberships m " +
+                    "LEFT JOIN groups_scim g ON m.groupId = g.id " +
                     "LEFT JOIN Users u ON m.userId = u.id";
 
-        await db.all(query, function (err, rows) {
+        await con.query(query, function (err, rows) {
             if (err !== null) {
                 out.error("Database.getGroupMemberships", err);
 
@@ -598,6 +618,33 @@ class Database {
 
         return groupUsers;
     }
+    static authenticateUser(username, password) {
+        let query = 'select count(*) from login where username = \"' + username + '\"  and password = \"' + password + '\"';
+        con.query(query, (err, count) => {
+            if (err) {
+              console.log(err);
+              return 0;
+            }
+            if(count[0]['count(*)'] == 1){
+                console.log("Validated");
+                return 1;
+            }else{
+                console.log("error while logging");
+                console.log(query);
+                return 0;
+            } 
+        });
+    } 
+    // static getUsersFromDatabase(){
+    //     let usersData = [];
+    //     con.query("SELECT * FROM Users", function (err, result, fields) {
+    //         if (err) throw err;
+    //         for(let i=0; i <= result.length; i++){
+    //             usersData.push(scimCore.parseSCIMUser(result[i]))
+    //         }
+    //     });
+    //     return usersData;
+    // }
 }
 
 module.exports = Database;

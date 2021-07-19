@@ -72,7 +72,7 @@ class SCIMCore {
 
     static parseSCIMUser(row, reqUrl) {
         return this.createSCIMUser(row["id"], row["active"], row["userName"], row["givenName"],
-                    row["middleName"], row["familyName"], row["email"], row["groups"], reqUrl);
+        row["middleName"], row["familyName"], row["email"], row["groups"], reqUrl);
     }
 
     static createSCIMUser(userId, active, userName, givenName, middleName, familyName, email, groups, reqUrl) {
@@ -108,7 +108,7 @@ class SCIMCore {
         scimUser["name"]["familyName"] = familyName;
         scimUser["emails"][0]["value"] = email;
         scimUser["groups"] = groups;
-
+        console.log("scim user returned", scimUser);
         return scimUser;
     }
 

@@ -13,7 +13,7 @@ class Logs {
     }
 
     static error(action, message) {
-        log("ERROR", action, message);
+        console.log("ERROR", action, message);
     }
 
     static logToFile(message) {

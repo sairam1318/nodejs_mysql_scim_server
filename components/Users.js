@@ -3,23 +3,33 @@ let scimCore = require('../core/SCIMCore');
 let db = require('../core/Database');
 let user = require('../models/User');
 let out = require('../core/Logs');
+const { PassThrough } = require('stream');
+const mysql = require('mysql');
+var con = mysql.createConnection({
+    user     : 'root',
+    password : '1234',
+    database : 'okta_scim'
+});
+con.connect();
+const axios = require('axios');
 
 class Users {
     static listUsers(req, res) {
         out.log("INFO", "Users.listUsers", "Got request: " + req.url);
-
         let urlParts = url.parse(req.url, true);
         let reqUrl = urlParts.pathname;
-
         let query = urlParts.query;
         let startIndex = query["startIndex"];
         let count = query["count"];
         let filter = query["filter"];
-
+        console.log("filter is ", filter);
+    
+        
         if (filter !== undefined) {
+            
             let attributeName = String(filter.split("eq")[0]).trim();
             let attributeValue = String(filter.split("eq")[1]).trim();
-
+            
             db.getFilteredUsers(attributeName, attributeValue, startIndex, count, reqUrl, function (result) {
                 if (result["status"] !== undefined) {
                     if (result["status"] === "400") {
@@ -35,11 +45,12 @@ class Users {
 
                 let jsonResult = JSON.stringify(result);
                 out.logToFile(jsonResult);
-
                 res.end(jsonResult);
             });
         } else {
-            db.getAllUsers(startIndex, count, reqUrl, function (result) {
+        
+            db.getAllUsers(startIndex = 1, count = 100, reqUrl, function (result) {
+                
                 if (result["status"] !== undefined) {
                     if (result["status"] === "400") {
                         res.writeHead(400, {"Content-Type": "text/plain"});
@@ -54,7 +65,6 @@ class Users {
 
                 let jsonResult = JSON.stringify(result);
                 out.logToFile(jsonResult);
-
                 res.end(jsonResult);
             });
         }
@@ -68,6 +78,8 @@ class Users {
         let userId = req.params.userId;
 
         db.getUser(userId, reqUrl, function (result) {
+            console.log(result["status"], " status code....")
+
             if (result["status"] !== undefined) {
                 if (result["status"] === "400") {
                     res.writeHead(400, {"Content-Type": "text/plain"});
@@ -82,7 +94,7 @@ class Users {
 
             let jsonResult = JSON.stringify(result);
             out.logToFile(jsonResult);
-
+            console.log(jsonResult);
             res.end(jsonResult);
         });
     }
@@ -97,12 +109,13 @@ class Users {
         req.on('data', function (data) {
             requestBody += data;
             let userJsonData = JSON.parse(requestBody);
-
+            // console.log("Userjson datata", userJsonData);
             out.logToFile(requestBody);
 
             let userModel = user.parseFromSCIMResource(userJsonData);
-
+            
             db.createUser(userModel, reqUrl, function (result) {
+                console.log(result);
                 if (result["status"] !== undefined) {
                     if (result["status"] === "400") {
                         res.writeHead(400, {"Content-Type": "text/plain"});
@@ -192,9 +205,11 @@ class Users {
             let userJsonData = JSON.parse(requestBody);
 
             out.logToFile(requestBody);
-
+            // console.log(userJsonData);
             let userModel = user.parseFromSCIMResource(userJsonData);
-
+            // console.log("User model", userModel);
+        
+            console.log("User model",userModel);
             db.updateUser(userModel, userId, reqUrl, function (result) {
                 if (result["status"] !== undefined) {
                     if (result["status"] === "400") {
@@ -213,6 +228,38 @@ class Users {
 
                 res.end(jsonResult);
             });
+        });
+    }
+    static exportUsers(req, res){
+    
+        con.query("SELECT * FROM Users", function (err, result, fields) {
+            if (err) throw err;
+            else
+            for(let i = 0; i < result.length; i ++ ) {
+                axios.post('https://dev-40888608.okta.com/api/v1/users?activate=false', {
+                    "profile": {
+                        "firstName": result[i]['userName'],
+                        "lastName": result[i]['familyName'],
+                        "email": result[i]['userName'] + "@example.com",
+                        "login": result[i]['userName'] + "@example.com"
+                    }
+                }, {
+                    "headers" : 
+                    {
+                    "Authorization": "SSWS00b5rxcw7DqhvjWphMVcWICoy-1ddqhpwVJvkX4eej", 
+                    "Accept": "application/json", 
+                    "Content-Type":"application/json"
+                    }
+                })
+                .then(res => {
+                    console.log(`statusCode: ${res.statusCode}`)
+                    console.log(res)
+                })
+                .catch(error => {
+                    console.error(error)
+                })
+            }
+            res.end("okay");          
         });
     }
 }

@@ -66,7 +66,7 @@ class Groups {
         let reqUrl = req.url;
 
         let groupId = req.params.groupId;
-
+        // console.log(req);
         db.getGroup(groupId, reqUrl, function (result) {
             if (result["status"] !== undefined) {
                 if (result["status"] === "400") {
@@ -101,7 +101,7 @@ class Groups {
             out.logToFile(requestBody);
 
             let groupModel = group.parseFromSCIMResource(groupJsonData);
-
+            console.log("Group model....", groupModel)
             db.createGroup(groupModel, reqUrl, function (result) {
                 if (result["status"] !== undefined) {
                     if (result["status"] === "400") {
@@ -160,7 +160,7 @@ class Groups {
 
                     let jsonResult = JSON.stringify(result);
                     out.logToFile(jsonResult);
-
+                    console.log(res.statusCode);
                     res.end(jsonResult);
                 });
             } else {
@@ -186,9 +186,11 @@ class Groups {
         let groupId = req.params.groupId;
 
         let requestBody = "";
+    
 
         req.on("data", function (data) {
             requestBody += data;
+            console.log(data);
             let groupJsonData = JSON.parse(requestBody);
 
             out.logToFile(requestBody);
@@ -210,7 +212,6 @@ class Groups {
 
                 let jsonResult = JSON.stringify(result);
                 out.logToFile(jsonResult);
-
                 res.end(jsonResult);
             });
         });

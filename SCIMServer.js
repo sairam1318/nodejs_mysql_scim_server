@@ -25,8 +25,24 @@ app.use(express.static('public'));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-let port = process.env.PORT || 8081; // Support for Heroku
+let port = process.env.PORT || 8082; // Support for Heroku
 
+
+app.get('/', function(req, res){
+    res.sendFile(__dirname + '/login/login.html')
+})
+
+app.post('/', function(req, res) {
+    let username = req.body.username;
+    let password = req.body.password;
+    let value = db.authenticateUser(username, password);
+    if(value == 1){
+        res.send("validated");
+        res.redirect(__dirname + "/scim/v2");
+    }else{
+        res.redirect(__dirname + '/');
+    }
+})
 /**
  * GET {{baseUrl}}/scim/v2/Users
  * List users with or without a filter
@@ -94,6 +110,8 @@ app.put('/scim/v2/Groups/:groupId', cGroups.updateGroup);
 app.get('/scim/v2', function (req, res) {
     res.send('SCIM');
 });
+
+app.get('/scim/v2/importUsers', cUsers.exportUsers)
 
 let server = app.listen(port, function () {
     out.log("INFO", "ServerStartup", "Listening on port " + port);

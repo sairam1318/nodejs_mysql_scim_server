@@ -33,11 +33,12 @@ class User  {
         user["email"] = userJsonData["emails"][0]["value"];
 
         let groups = [];
-
-        for (let i = 0; i < userJsonData["groups"].length; i++) {
-            groups.push(this.parseGroups(userJsonData["groups"][i]));
+        console.log("user active", userJsonData["active"])
+        if(!userJsonData["groups"] === undefined){
+            for (let i = 0; i < userJsonData["groups"].length; i++) {
+                groups.push(this.parseGroups(userJsonData["groups"][i]));
+            }
         }
-
         user["groups"] = groups;
 
         return user;

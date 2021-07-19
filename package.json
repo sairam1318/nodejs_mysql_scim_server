@@ -17,15 +17,20 @@
   },
   "homepage": "https://github.com/SohaibAjmal/Okta-Scim-Server#readme",
   "dependencies": {
+    "axios": "^0.21.1",
     "body-parser": "^1.18.2",
     "express": "^4.16.2",
     "fs": "0.0.1-security",
     "moment": "^2.20.1",
-    "sqlite3": "^3.1.13",
+    "mysql": "github:mysqljs/mysql",
+    "sqlite3": "https://github.com/mapbox/node-sqlite3/tarball/master",
     "url": "^0.11.0",
     "uuid": "^3.2.1"
   },
   "engines": {
     "node": "8.9.4"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.12"
   }
 }
